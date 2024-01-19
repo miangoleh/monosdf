@@ -24,11 +24,11 @@ from utils import loadYaml
 # depth [720, 1280]
 image_size = 384
 trans_totensor = transforms.Compose([
-    transforms.CenterCrop(720),
+    transforms.CenterCrop(2160),
     transforms.Resize(image_size, interpolation=PIL.Image.BILINEAR),
 ])
 depth_trans_totensor = transforms.Compose([
-    transforms.CenterCrop(720),
+    transforms.CenterCrop(2160),
     transforms.Resize(image_size, interpolation=PIL.Image.NEAREST),
 ])
 
@@ -43,7 +43,7 @@ for scene, out_name in zip(scenes, out_names):
     os.makedirs(out_path, exist_ok=True)
     print(out_path)
 
-    folders = ["image", "mask", "depth"]
+    folders = ["image", "mask"]
     for folder in folders:
         out_folder = os.path.join(out_path, folder)
         os.makedirs(out_folder, exist_ok=True)
@@ -57,7 +57,6 @@ for scene, out_name in zip(scenes, out_names):
     # load intrinsic
     camera_params = loadYaml(os.path.join(data_root,scene,"camera_parameters.yaml"))
     
-    import ipdb; ipdb.set_trace()
     intrinsics = []
     for camera in CAMERA_STR:
         intrinsic_ = camera_params[camera]['intrinsics']
@@ -66,7 +65,7 @@ for scene, out_name in zip(scenes, out_names):
     extrinsics = []
     poses = []
     for camera in CAMERA_STR:
-        extrinsics_ = camera_params['extrinsics']
+        extrinsics_ = camera_params[camera]['extrinsics']
         extrinsics.append(np.array(extrinsics_))
         poses_ =  np.linalg.inv(np.array(extrinsics_))
         poses.append(poses_)
@@ -126,7 +125,7 @@ for scene, out_name in zip(scenes, out_names):
         
         # save pose
         pcds.append(pose[:3, 3])
-        pose = K @ extrinsics
+        pose = K @ extrinsic
         
         #cameras["scale_mat_%d"%(out_index)] = np.eye(4).astype(np.float32)
         cameras["scale_mat_%d"%(out_index)] = scale_mat
