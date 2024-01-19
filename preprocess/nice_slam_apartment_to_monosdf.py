@@ -118,10 +118,10 @@ for scene, out_name in zip(scenes, out_names):
     print(K)
     
     for idx, (valid, pose, depth_path, image_path) in enumerate(zip(valid_poses, poses, depth_paths, color_paths)):
-        print(idx, valid)
         if idx % 20 != 0: continue
         if not valid : continue
-        
+        print(idx, valid)
+
         target_image = os.path.join(out_path, "image/%06d.png"%(out_index))
         print(target_image)
         img = Image.open(image_path)
