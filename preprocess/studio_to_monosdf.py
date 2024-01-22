@@ -13,6 +13,8 @@ from PIL import Image
 from torchvision import transforms
 import matplotlib.pyplot as plt
 
+import open3d as o3d
+
 CAMERA_STR = ["camera1", "camera2", "camera3", "camera4", "camera5", "camera6", "camera7", "camera8"]
 
 import sys
@@ -62,15 +64,13 @@ for scene, out_name in zip(scenes, out_names):
         intrinsic_ = camera_params[camera]['intrinsics']
         intrinsics.append(np.array(intrinsic_))
 
-    extrinsics = []
     poses = []
     for camera in CAMERA_STR:
         extrinsics_ = camera_params[camera]['extrinsics']
-        extrinsics.append(np.array(extrinsics_))
-        poses_ =  np.linalg.inv(np.array(extrinsics_))
+        poses_ = np.linalg.inv(np.array(extrinsics_))
         poses.append(poses_)
 
-    poses = np.array(poses)
+    poses = np.array(poses) 
 
     # deal with invalid poses
     valid_poses = np.isfinite(poses).all(axis=2).all(axis=1)
@@ -78,7 +78,7 @@ for scene, out_name in zip(scenes, out_names):
     max_vertices = poses[:, :3, 3][valid_poses].max(axis=0)
  
     center = (min_vertices + max_vertices) / 2.
-    scale = 2. / (np.max(max_vertices - min_vertices) + 3.)
+    scale = 2. / (np.max(max_vertices - min_vertices) + 1.)
     print(center, scale)
 
     # we should normalized to unit cube
@@ -90,7 +90,6 @@ for scene, out_name in zip(scenes, out_names):
     H, W = 2160, 4096
     new_intrinsics = []
     for camera_intrinsic in intrinsics:
-        print(camera_intrinsic)
         # center crop by 2160
         offset_x = (W - 2160) * 0.5
         offset_y = (H - 2160) * 0.5
@@ -100,16 +99,16 @@ for scene, out_name in zip(scenes, out_names):
         resize_factor = 384 / 2160.
         camera_intrinsic[:2, :] *= resize_factor
 
-        K = np.eye(4)
-        K[:3, :3] = camera_intrinsic
-        new_intrinsics.append(K)
+        K_int = np.eye(4)
+        K_int[:3, :3] = camera_intrinsic
+        new_intrinsics.append(K_int)
 
 
     out_index = 0
     pcds = []
     cameras = {}
 
-    for idx, (pose, extrinsic, K, image_path) in enumerate(zip(poses, extrinsics, new_intrinsics, color_paths)):
+    for idx, (pose, K, image_path) in enumerate(zip(poses, new_intrinsics, color_paths)):
         print(idx)
 
         target_image = os.path.join(out_path, "image/%06d.png"%(out_index))
@@ -125,12 +124,18 @@ for scene, out_name in zip(scenes, out_names):
         
         # save pose
         pcds.append(pose[:3, 3])
-        pose = K @ extrinsic
+        pose = K @ np.linalg.inv(pose)
         
         #cameras["scale_mat_%d"%(out_index)] = np.eye(4).astype(np.float32)
         cameras["scale_mat_%d"%(out_index)] = scale_mat
         cameras["world_mat_%d"%(out_index)] = pose
 
         out_index += 1
+
+    # save pcd
+    pcds = np.stack(pcds)
+    pcd_o3d = o3d.geometry.PointCloud()
+    pcd_o3d.points = o3d.utility.Vector3dVector(pcds)
+    o3d.io.write_point_cloud(os.path.join(out_path,f"camera_pose.ply"), pcd_o3d)
 
     np.savez(os.path.join(out_path, "cameras.npz"), **cameras)
