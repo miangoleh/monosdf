@@ -56,6 +56,12 @@ for scene, out_name in zip(scenes, out_names):
         key=lambda x: int(os.path.basename(x)[:-4]))
     print(color_paths)
 
+    # load mask 
+    mask_path = os.path.join(data_root, scene, 'alpha')
+    mask_paths = sorted(glob.glob(os.path.join(mask_path, '*.png')), 
+        key=lambda x: int(os.path.basename(x)[:-4]))
+    print(mask_paths)
+
     # load intrinsic
     camera_params = loadYaml(os.path.join(data_root,scene,"camera_parameters.yaml"))
     
@@ -78,7 +84,7 @@ for scene, out_name in zip(scenes, out_names):
     max_vertices = poses[:, :3, 3][valid_poses].max(axis=0)
  
     center = (min_vertices + max_vertices) / 2.
-    scale = 2. / (np.max(max_vertices - min_vertices) + 1.)
+    scale = 2. / (np.max(max_vertices - min_vertices) + 0.1)
     print(center, scale)
 
     # we should normalized to unit cube
@@ -108,7 +114,7 @@ for scene, out_name in zip(scenes, out_names):
     pcds = []
     cameras = {}
 
-    for idx, (pose, K, image_path) in enumerate(zip(poses, new_intrinsics, color_paths)):
+    for idx, (pose, K, image_path, mask_path) in enumerate(zip(poses, new_intrinsics, color_paths, mask_paths)):
         print(idx)
 
         target_image = os.path.join(out_path, "image/%06d.png"%(out_index))
@@ -117,20 +123,27 @@ for scene, out_name in zip(scenes, out_names):
         img_tensor = trans_totensor(img)
         img_tensor.save(target_image)
 
-        mask = (np.ones((image_size, image_size, 3)) * 255.).astype(np.uint8)
+        target_mask= os.path.join(out_path, "mask/%06d.png"%(out_index))
+        # mask = (np.ones((image_size, image_size, 3)) * 255.).astype(np.uint8)
+        mask = Image.open(mask_path)
+        mask_tensor = trans_totensor(mask)
+        mask_tensor.save(target_mask)
 
-        target_image = os.path.join(out_path, "mask/%03d.png"%(out_index))
-        cv2.imwrite(target_image, mask)
-        
+        np.save(os.path.join(out_path, "%06d_mask.npy"%(out_index)), np.array(mask_tensor))
+
         # save pose
-        pcds.append(pose[:3, 3])
-        pose = K @ np.linalg.inv(pose)
+        camera_mat = K @ np.linalg.inv(pose)
         
         #cameras["scale_mat_%d"%(out_index)] = np.eye(4).astype(np.float32)
         cameras["scale_mat_%d"%(out_index)] = scale_mat
-        cameras["world_mat_%d"%(out_index)] = pose
+        cameras["world_mat_%d"%(out_index)] = camera_mat
 
         out_index += 1
+
+        pose_norm = np.linalg.inv(pose) @ scale_mat
+        pose_norm = np.linalg.inv(pose_norm)
+
+        pcds.append(pose_norm[:3, 3])
 
     # save pcd
     pcds = np.stack(pcds)

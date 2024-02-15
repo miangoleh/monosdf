@@ -115,6 +115,22 @@ class GradientLoss(nn.Module):
         return total
 
 
+class DepthMetricLoss(nn.Module):
+    def __init__(self, alpha=0.5, scales=4, reduction='batch-based'):
+        super().__init__()
+
+        self.__data_loss = MSELoss(reduction=reduction)
+        self.__regularization_loss = GradientLoss(scales=scales, reduction=reduction)
+        self.__alpha = alpha
+
+    def forward(self, prediction, target, mask):
+        total = self.__data_loss(prediction, target, mask)
+        if self.__alpha > 0:
+            total += self.__alpha * self.__regularization_loss(prediction, target, mask)
+        return total
+
+
+
 class ScaleAndShiftInvariantLoss(nn.Module):
     def __init__(self, alpha=0.5, scales=4, reduction='batch-based'):
         super().__init__()
@@ -126,6 +142,8 @@ class ScaleAndShiftInvariantLoss(nn.Module):
         self.__prediction_ssi = None
 
     def forward(self, prediction, target, mask):
+        # Mahdi : moved from line 211 to here to avoid mixing it for metric depth
+        target = target* 50 + 0.5
 
         scale, shift = compute_scale_and_shift(prediction, target, mask)
         self.__prediction_ssi = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
@@ -150,7 +168,8 @@ class MonoSDFLoss(nn.Module):
                  depth_weight = 0.1,
                  normal_l1_weight = 0.05,
                  normal_cos_weight = 0.05,
-                 end_step = -1):
+                 end_step = -1,
+                 metric_depth = False):
         super().__init__()
         self.eikonal_weight = eikonal_weight
         self.smooth_weight = smooth_weight
@@ -159,7 +178,13 @@ class MonoSDFLoss(nn.Module):
         self.normal_cos_weight = normal_cos_weight
         self.rgb_loss = utils.get_class(rgb_loss)(reduction='mean')
         
-        self.depth_loss = ScaleAndShiftInvariantLoss(alpha=0.5, scales=1)
+        if metric_depth:
+            self.depth_loss = DepthMetricLoss(alpha=0.5, scales=1)
+            print("")
+            print("##### using metric depth loss #####")
+            print("")
+        else:
+            self.depth_loss = ScaleAndShiftInvariantLoss(alpha=0.5, scales=1)
         
         print(f"using weight for loss RGB_1.0 EK_{self.eikonal_weight} SM_{self.smooth_weight} Depth_{self.depth_weight} NormalL1_{self.normal_l1_weight} NormalCos_{self.normal_cos_weight}")
         
@@ -186,8 +211,8 @@ class MonoSDFLoss(nn.Module):
         return smooth_loss
     
     def get_depth_loss(self, depth_pred, depth_gt, mask):
-        # TODO remove hard-coded scaling for depth
-        return self.depth_loss(depth_pred.reshape(1, 32, 32), (depth_gt * 50 + 0.5).reshape(1, 32, 32), mask.reshape(1, 32, 32))
+        # TODO remove hard-coded scaling for depth --> # Mahdi: Moved inside SSI depth function
+        return self.depth_loss(depth_pred.reshape(1, 32, 32), depth_gt.reshape(1, 32, 32), mask.reshape(1, 32, 32))
         
     def get_normal_loss(self, normal_pred, normal_gt):
         normal_gt = torch.nn.functional.normalize(normal_gt, p=2, dim=-1)
