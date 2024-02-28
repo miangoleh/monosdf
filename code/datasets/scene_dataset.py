@@ -134,7 +134,8 @@ class SceneDatasetDN(torch.utils.data.Dataset):
                  scan_id=0,
                  center_crop_type='xxxx',
                  use_mask=False,
-                 num_views=-1
+                 num_views=-1,
+                 metric_depth=False
                  ):
 
         self.instance_dir = os.path.join('../data', data_dir, 'scan{0}'.format(scan_id))
@@ -155,7 +156,11 @@ class SceneDatasetDN(torch.utils.data.Dataset):
             return data_paths
             
         image_paths = glob_data(os.path.join('{0}'.format(self.instance_dir), "*_rgb.png"))
-        depth_paths = glob_data(os.path.join('{0}'.format(self.instance_dir), "*_depth.npy"))
+        if metric_depth == False:
+            depth_paths = glob_data(os.path.join('{0}'.format(self.instance_dir), "*_depth.npy"))
+        else:
+            depth_paths = glob_data(os.path.join('{0}'.format(self.instance_dir), "*_depthmetric.npy"))
+            
         normal_paths = glob_data(os.path.join('{0}'.format(self.instance_dir), "*_normal.npy"))
         
         # mask is only used in the replica dataset as some monocular depth predictions have very large error and we ignore it

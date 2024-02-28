@@ -39,6 +39,7 @@ out_path_prefix = '../data/Studio/'
 data_root = '/project/aksoy-lab/Mahdi/MultiViewFromMono/Mytestdata/'
 scenes = ['frame_20000']
 out_names = ['scan1']
+metric_depth_path = '/project/aksoy-lab/Mahdi/MultiViewFromMono/Mytestdata/frame_20000/dense/stereo/depth_maps'
 
 for scene, out_name in zip(scenes, out_names):
     out_path = os.path.join(out_path_prefix, out_name)
@@ -61,6 +62,10 @@ for scene, out_name in zip(scenes, out_names):
     mask_paths = sorted(glob.glob(os.path.join(mask_path, '*.png')), 
         key=lambda x: int(os.path.basename(x)[:-4]))
     print(mask_paths)
+
+    # load metric depth
+    depth_paths = sorted(glob.glob(os.path.join(metric_depth_path, '*.npy')), 
+        key=lambda x: int(os.path.basename(x)[:-4]))
 
     # load intrinsic
     camera_params = loadYaml(os.path.join(data_root,scene,"camera_parameters.yaml"))
@@ -130,6 +135,15 @@ for scene, out_name in zip(scenes, out_names):
         mask_tensor.save(target_mask)
 
         np.save(os.path.join(out_path, "%06d_mask.npy"%(out_index)), np.array(mask_tensor))
+        depth = np.load(depth_paths[idx])
+        
+        # scale the depth to match the world transformation
+        depth = depth * scale 
+
+        depth = Image.fromarray(depth)
+        depth_tensor = trans_totensor(depth)
+
+        np.save(os.path.join(out_path, "%06d_depthmetric.npy"%(out_index)), np.array(depth_tensor))
 
         # save pose
         camera_mat = K @ np.linalg.inv(pose)

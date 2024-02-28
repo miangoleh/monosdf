@@ -124,7 +124,9 @@ class DepthMetricLoss(nn.Module):
         self.__alpha = alpha
 
     def forward(self, prediction, target, mask):
-        total = self.__data_loss(prediction, target, mask)
+        # metric depth is sparse, so we need to mask non valid pixels
+        depth_mask = mask * (target > 0.2)
+        total = self.__data_loss(prediction, target, depth_mask)
         if self.__alpha > 0:
             total += self.__alpha * self.__regularization_loss(prediction, target, mask)
         return total
